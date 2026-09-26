@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-line;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background-color: #0D0F12;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(245,243,238,0.035) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+  h1, h2 {
+    @apply font-display text-ink tracking-tight;
+  }
+  h3, h4 {
+    @apply font-display text-ink tracking-tight;
+  }
+  ::selection {
+    background-color: #FF6B4A;
+    color: #F5F3EE;
+  }
+  :focus-visible {
+    outline: 2px solid #FF6B4A;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-8;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-display font-semibold text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-signal {
+    @apply btn bg-signal text-white shadow-btn hover:bg-signal-dark hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98];
+  }
+  .btn-outline {
+    @apply btn border border-line text-ink hover:border-teal/50 hover:bg-charcoal-elevated;
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:text-ink hover:bg-charcoal-elevated/60;
+  }
+  .card {
+    @apply rounded-xl2 border border-line bg-charcoal-card shadow-card transition-shadow duration-200 hover:shadow-card-hover;
+  }
+  .eyebrow {
+    @apply font-mono text-xs uppercase tracking-[0.18em] text-teal;
+  }
+  .input-field {
+    @apply w-full rounded-lg border border-line bg-charcoal-card px-4 py-3 text-sm text-ink placeholder:text-faint focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20 transition;
+  }
+  .label-field {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+}
+
+.leaflet-container {
+  font-family: 'Inter', sans-serif;
+  border-radius: 1.25rem;
+}

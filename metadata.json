@@ -1,0 +1,8 @@
+{
+  "name": "Nearpin",
+  "description": "Nearpin connects nearby business owners with students for temporary micro jobs, matched by real-time proximity.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

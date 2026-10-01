@@ -4,7 +4,7 @@ const { USER_ROLES } = require("../config/constants");
 
 /**
  * Student discriminator - extends base User with student-specific fields:
- * identity documents, age validation, college info and rating aggregates.
+ * identity documents, age validation, college info, UPI details, and rating aggregates.
  */
 const studentSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -21,19 +21,17 @@ const studentSchema = new mongoose.Schema({
   },
   about: { type: String, maxlength: 500, default: "" },
   collegeName: { type: String, trim: true },
-
+  upiId: { type: String, trim: true, default: "" },
   documents: {
     aadhaarCard: {
       url: { type: String, required: true },
       publicId: { type: String },
     },
   },
-
   profilePicture: {
     url: { type: String, default: "" },
     publicId: { type: String, default: "" },
   },
-
   averageRating: { type: Number, default: 0, min: 0, max: 5 },
   totalRatings: { type: Number, default: 0 },
   completedJobsCount: { type: Number, default: 0 },

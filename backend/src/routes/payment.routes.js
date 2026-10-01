@@ -5,7 +5,8 @@ const { authorize } = require("../middlewares/role.middleware");
 const paymentController = require("../controllers/payment.controller");
 const { USER_ROLES } = require("../config/constants");
 
-router.post("/:agreementId", protect, authorize(USER_ROLES.BUSINESS), paymentController.initPaymentConfirmation);
+router.get("/agreement/:agreementId", protect, authorize(USER_ROLES.BUSINESS, USER_ROLES.STUDENT), paymentController.getPaymentConfirmation);
+router.post("/:agreementId", protect, authorize(USER_ROLES.BUSINESS, USER_ROLES.STUDENT), paymentController.initPaymentConfirmation);
 router.patch(
   "/:id/confirm",
   protect,

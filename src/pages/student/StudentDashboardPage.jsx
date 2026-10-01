@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import * as applicationApi from "../../api/application.api";
+import * as studentApi from "../../api/student.api";
 import * as ratingApi from "../../api/rating.api";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
@@ -34,9 +35,20 @@ const StudentDashboardPage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [reviewModalTarget, setReviewModalTarget] = useState(null);
 
+  // UPI ID quick editor
+  const [editingUpi, setEditingUpi] = useState(false);
+  const [upiInput, setUpiInput] = useState(user?.upiId || "");
+  const [savingUpi, setSavingUpi] = useState(false);
+
   useEffect(() => {
     refreshUser().catch(() => {});
   }, [refreshUser]);
+
+  useEffect(() => {
+    if (user?.upiId) {
+      setUpiInput(user.upiId);
+    }
+  }, [user?.upiId]);
 
   useEffect(() => {
     setLoading(true);
@@ -50,6 +62,23 @@ const StudentDashboardPage = () => {
       })
       .finally(() => setLoading(false));
   }, [tab]);
+
+  const handleSaveUpi = async (e) => {
+    e?.preventDefault();
+    if (!upiInput.trim()) return;
+    setSavingUpi(true);
+    setError("");
+    try {
+      await studentApi.updateProfile({ upiId: upiInput.trim() });
+      await refreshUser();
+      setSuccessMessage("UPI ID saved! Your dynamic QR code will now pay directly to this ID.");
+      setEditingUpi(false);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to update UPI ID.");
+    } finally {
+      setSavingUpi(false);
+    }
+  };
 
   const withdraw = async (id) => {
     setError("");
@@ -85,12 +114,12 @@ const StudentDashboardPage = () => {
       {error && (
         <p className="mt-5 rounded-lg bg-signal-light px-4 py-3 text-sm text-signal-dark">{error}</p>
       )}
-
       {successMessage && (
         <p className="mt-5 rounded-lg bg-teal/15 border border-teal/40 px-4 py-3 text-sm text-ink">{successMessage}</p>
       )}
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      {/* Profile & KPI Cards */}
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-5">
           <p className="font-display text-2xl font-bold text-ink">{user?.averageRating?.toFixed?.(1) ?? "—"}</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-wide text-muted">Average rating</p>
@@ -102,6 +131,43 @@ const StudentDashboardPage = () => {
         <div className="card p-5">
           <p className="font-display text-2xl font-bold capitalize text-ink">{user?.verificationStatus}</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-wide text-muted">Verification status</p>
+        </div>
+
+        {/* UPI Payout Settings Box */}
+        <div className="card p-5 flex flex-col justify-between border-emerald-500/30">
+          <div>
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[11px] uppercase tracking-wide text-emerald-400 font-semibold">UPI ID for Payouts</p>
+              <button
+                type="button"
+                onClick={() => setEditingUpi(!editingUpi)}
+                className="text-[11px] text-teal hover:underline font-mono"
+              >
+                {editingUpi ? "Cancel" : "Edit"}
+              </button>
+            </div>
+            {editingUpi ? (
+              <form onSubmit={handleSaveUpi} className="mt-2 flex flex-col gap-2">
+                <input
+                  type="text"
+                  value={upiInput}
+                  onChange={(e) => setUpiInput(e.target.value)}
+                  placeholder="e.g. yourname@okhdfcbank"
+                  className="rounded border border-line bg-charcoal px-2 py-1 text-xs text-ink focus:border-teal focus:outline-none"
+                />
+                <Button variant="signal" size="sm" type="submit" disabled={savingUpi} className="!text-[10px] !py-1">
+                  {savingUpi ? "Saving..." : "Save UPI"}
+                </Button>
+              </form>
+            ) : (
+              <p className="mt-2 font-mono text-xs font-semibold text-ink truncate">
+                {user?.upiId || (user?.phone ? `${user.phone}@upi` : "Not set")}
+              </p>
+            )}
+          </div>
+          <span className="text-[10px] text-muted mt-2">
+            Used to generate your instant QR code at job completion.
+          </span>
         </div>
       </div>
 
@@ -152,7 +218,15 @@ const StudentDashboardPage = () => {
                     to={`/active-jobs/${app.job._id}`}
                     className="rounded-full bg-teal px-3 py-1 font-mono text-[11px] text-paper hover:bg-teal-dark"
                   >
-                    Active job
+                    Active job & Payment
+                  </Link>
+                )}
+                {app.status === "completed" && (
+                  <Link
+                    to={`/active-jobs/${app.job._id}`}
+                    className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-400 hover:bg-emerald-500/20"
+                  >
+                    ₹ Settlement & QR
                   </Link>
                 )}
                 {app.status === "accepted" && app.job?.status === "expired" && (

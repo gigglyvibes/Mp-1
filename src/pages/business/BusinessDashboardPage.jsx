@@ -1,3 +1,5 @@
+import WhatsAppButton from "../../components/ui/WhatsAppButton";
+import { formatDateTimeReadable } from "../../utils/whatsapp";
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -389,7 +391,14 @@ const BusinessDashboardPage = () => {
                             </p>
                           </div>
                           {app.status === "accepted" && (
-                            <div className="flex flex-wrap justify-end gap-2">
+                            <div className="flex flex-wrap justify-end gap-2 items-center">
+                              {app.student?.phone && (
+                                <WhatsAppButton
+                                  phone={app.student.phone}
+                                  label={`WhatsApp ${app.student?.name?.split(" ")[0] || "Student"}`}
+                                  message={`Hi ${app.student?.name || "there"}, I have accepted your application for the ${job.title} shift scheduled on ${formatDateTimeReadable(job.startDateTime)} on NearPin. Please let me know if you have any questions!`}
+                                />
+                              )}
                               <Link
                                 to={`/agreements/application/${app._id}`}
                                 className="rounded-full border border-teal px-3 py-1 font-mono text-[11px] text-teal hover:bg-teal/10"
@@ -408,7 +417,13 @@ const BusinessDashboardPage = () => {
                             </div>
                           )}
                           {app.status === "completed" && (
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              <Link
+                                to={`/active-jobs/${job._id}`}
+                                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-400 hover:bg-emerald-500/20"
+                              >
+                                ₹ Settle Payment
+                              </Link>
                               <button
                                 type="button"
                                 onClick={() =>

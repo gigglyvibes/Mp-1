@@ -15,8 +15,9 @@ const getProfile = asyncHandler(async (req, res) => {
  * @route PATCH /api/v1/students/profile
  */
 const updateProfile = asyncHandler(async (req, res) => {
-  const allowedFields = ["name", "about", "collegeName", "location"];
+  const allowedFields = ["name", "about", "collegeName", "location", "upiId"];
   const updates = {};
+
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   });
@@ -53,7 +54,7 @@ const updateProfile = asyncHandler(async (req, res) => {
  */
 const getStudentById = asyncHandler(async (req, res) => {
   const student = await Student.findById(req.params.id).select(
-    "name age gender about collegeName profilePicture averageRating totalRatings completedJobsCount verificationStatus"
+    "name age gender about collegeName upiId profilePicture averageRating totalRatings completedJobsCount verificationStatus"
   );
   if (!student) throw ApiError.notFound("Student not found.");
   new ApiResponse(200, student, "Student profile fetched.").send(res);

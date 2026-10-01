@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 
 /**
- * The platform never processes payments. This model only records
+ * The platform never processes payments. This model records
  * mutual confirmation statements from both parties after the student's
- * work has been approved by the business.
+ * work has been approved by the business, along with UPI transaction details.
  */
 const paymentConfirmationSchema = new mongoose.Schema(
   {
@@ -12,7 +12,12 @@ const paymentConfirmationSchema = new mongoose.Schema(
     business: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     student: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     agreedPaymentAmount: { type: Number, min: 0 },
-
+    paymentMethod: {
+      type: String,
+      enum: ["upi", "cash"],
+      default: "upi",
+    },
+    upiReference: { type: String, trim: true, default: "" },
     businessConfirmation: {
       confirmed: { type: Boolean, default: false },
       statement: { type: String, default: "I confirm that I have paid the agreed amount to the Student." },
@@ -23,7 +28,6 @@ const paymentConfirmationSchema = new mongoose.Schema(
       statement: { type: String, default: "I confirm that I have received the agreed payment." },
       confirmedAt: { type: Date },
     },
-
     isFullyConfirmed: { type: Boolean, default: false },
     fullyConfirmedAt: { type: Date },
   },

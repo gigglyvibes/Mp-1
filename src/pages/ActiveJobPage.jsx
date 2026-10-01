@@ -1,13 +1,18 @@
+import WhatsAppButton from "../components/ui/WhatsAppButton";
+import { formatDateTimeReadable } from "../utils/whatsapp";
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import * as jobApi from "../api/job.api";
 import * as applicationApi from "../api/application.api";
+import * as agreementApi from "../api/agreement.api";
+import * as paymentApi from "../api/payment.api";
 import * as ratingApi from "../api/rating.api";
 import { useAuth } from "../context/AuthContext";
 import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import ReviewModal from "../components/reviews/ReviewModal";
+import PaymentSettlementCard from "../components/payment/PaymentSettlementCard";
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -23,6 +28,8 @@ const ActiveJobPage = () => {
   const { user } = useAuth();
   const [job, setJob] = useState(null);
   const [application, setApplication] = useState(null);
+  const [agreement, setAgreement] = useState(null);
+  const [paymentRecord, setPaymentRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -48,6 +55,27 @@ const ActiveJobPage = () => {
       setApplication(currentApp);
 
       if (currentApp) {
+        // Fetch Agreement
+        try {
+          const agreeRes = await agreementApi.getAgreementByApplication(currentApp._id);
+          const currentAgreement = agreeRes.data.data;
+          setAgreement(currentAgreement);
+
+          // Fetch Payment Confirmation Record if available
+          if (currentAgreement?._id) {
+            try {
+              const payRes = await paymentApi.getPaymentConfirmation(currentAgreement._id);
+              if (payRes.data.data) {
+                setPaymentRecord(payRes.data.data);
+              }
+            } catch (pErr) {
+              // Not initiated or not ready yet
+            }
+          }
+        } catch (aErr) {
+          // Agreement not found yet
+        }
+
         const existingLocal = ratingApi.getLocalRating(currentApp._id, user?.role);
         if (existingLocal) {
           setUserRating(existingLocal);
@@ -90,9 +118,19 @@ const ActiveJobPage = () => {
       setApplication(data.data);
       const jobResponse = await jobApi.getJobById(jobId);
       setJob(jobResponse.data.data);
-      setMessage("Work approved! The job is marked completed.");
-      // Automatically trigger 5-star rating popup for business owner
-      setShowReviewModal(true);
+      setMessage("Work approved! The job is now marked completed and payment settlement is unlocked.");
+
+      // Initialize payment record if agreement exists
+      if (agreement?._id) {
+        try {
+          const initRes = await paymentApi.initPaymentConfirmation(agreement._id);
+          if (initRes.data.data) {
+            setPaymentRecord(initRes.data.data);
+          }
+        } catch (initErr) {
+          console.error("Init payment error:", initErr);
+        }
+      }
     } catch (err) {
       setError(err.response?.data?.message || "Unable to approve the work.");
     } finally {
@@ -134,37 +172,57 @@ const ActiveJobPage = () => {
 
   return (
     <section className="container-app py-14">
-      <div className="mx-auto max-w-4xl">
-        <Link to={dashboardPath} className="font-mono text-xs text-muted hover:text-ink">
-          ← Back to dashboard
-        </Link>
-
-        <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="eyebrow">{completed ? "Completed job" : expired ? "Expired job" : "Active job"}</p>
-            <h1 className="mt-2 text-3xl font-bold">{job.title}</h1>
-            <p className="mt-1 text-sm text-muted">{job.job} · {job.address}</p>
+      <div className="mx-auto max-w-4xl space-y-8">
+        <div>
+          <Link to={dashboardPath} className="font-mono text-xs text-muted hover:text-ink">
+            ← Back to dashboard
+          </Link>
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="eyebrow">{completed ? "Completed job" : expired ? "Expired job" : "Active job"}</p>
+              <h1 className="mt-2 text-3xl font-bold">{job.title}</h1>
+              <p className="mt-1 text-sm text-muted">{job.category || job.job} · {job.address}</p>
+            </div>
+            <Badge tone={completed ? "signal" : "teal"}>{completed ? "Completed" : "Active"}</Badge>
           </div>
-          <Badge tone={completed ? "signal" : "teal"}>{completed ? "Completed" : "Active"}</Badge>
         </div>
 
         {message && (
-          <div className="mt-6 rounded-2xl border border-teal/30 bg-teal/10 p-4 text-sm text-ink">
+          <div className="rounded-2xl border border-teal/30 bg-teal/10 p-4 text-sm text-ink">
             {message}
           </div>
         )}
+
         {error && (
-          <div className="mt-6 rounded-2xl border border-signal/30 bg-signal/10 p-4 text-sm text-signal-dark">
+          <div className="rounded-2xl border border-signal/30 bg-signal/10 p-4 text-sm text-signal-dark">
             {error}
           </div>
         )}
 
+        {/* STEP 6: DYNAMIC UPI QR & PAYMENT SETTLEMENT CARD (When Work is Completed/Approved) */}
+        {completed && (
+          <PaymentSettlementCard
+            paymentRecord={paymentRecord}
+            isBusiness={isBusiness}
+            isStudent={isStudent}
+            studentUser={application?.student || { name: "Student", phone: "" }}
+            businessUser={job.business || { businessName: "Business" }}
+            amount={agreement?.agreedPaymentAmount || job.price}
+            jobTitle={job.title}
+            onPaymentUpdated={(updated) => {
+              setPaymentRecord(updated);
+              setMessage("Payment confirmation recorded successfully!");
+            }}
+            onOpenReview={() => setShowReviewModal(true)}
+          />
+        )}
+
         {/* Highlight rating banner if job is completed */}
         {completed && (
-          <div className="mt-6 rounded-2xl border border-gold/40 bg-gold/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="rounded-2xl border border-gold/40 bg-gold/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <span className="font-mono text-xs uppercase tracking-wider text-gold font-bold">
-                ⭐ Job Completed Successfully
+                ⭐ Verified Experience Rating
               </span>
               <h3 className="mt-1 font-bold text-ink text-lg">
                 {userRating
@@ -180,12 +238,55 @@ const ActiveJobPage = () => {
               onClick={() => setShowReviewModal(true)}
               className="shrink-0"
             >
-              {userRating ? "Edit Rating ⭐" : "Leave 5-Star Rating ⭐"}
+              {userRating ? "Edit Rating ⭐" : "Leave Rating ⭐"}
             </Button>
           </div>
         )}
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Direct WhatsApp & Contact Card for Coordination */}
+        <div className="rounded-2xl border border-line bg-charcoal p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-teal/15 text-teal flex items-center justify-center font-bold text-lg font-mono">
+              {isBusiness ? "🎓" : "🏪"}
+            </div>
+            <div>
+              <p className="eyebrow">
+                {isBusiness ? "Assigned Student Worker" : "Hiring Business Partner"}
+              </p>
+              <h4 className="text-base font-bold text-ink flex items-center gap-2">
+                {targetName}
+                <span className="text-xs font-normal text-muted font-mono">
+                  ({isBusiness ? application?.student?.phone || "Phone hidden" : job.business?.phone || "Phone hidden"})
+                </span>
+              </h4>
+              <p className="text-xs text-muted mt-0.5">
+                Use WhatsApp for shift arrival timing, uniforms, or directions.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {isBusiness && application?.student?.phone && (
+              <WhatsAppButton
+                phone={application.student.phone}
+                variant="button"
+                label={`Message ${targetName.split(" ")[0]} on WhatsApp`}
+                message={`Hi ${targetName}, I have accepted your application for the ${job.title} shift scheduled on ${formatDateTimeReadable(job.startDateTime)} on NearPin. Please let me know if you have any questions!`}
+              />
+            )}
+            {isStudent && job.business?.phone && (
+              <WhatsAppButton
+                phone={job.business.phone}
+                variant="button"
+                label={`Message ${targetName.split(" ")[0]} on WhatsApp`}
+                message={`Hi, this is ${user?.name || "the student"} from NearPin regarding the ${job.title} shift scheduled on ${formatDateTimeReadable(job.startDateTime)}. I wanted to check in regarding arrival details.`}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Key Job Info Cards */}
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div className="card p-5">
             <p className="eyebrow">Date from</p>
             <p className="mt-2 font-semibold text-ink">{formatDate(job.startDateTime)}</p>
@@ -199,12 +300,13 @@ const ActiveJobPage = () => {
             <p className="mt-2 font-semibold text-ink">{job.workingHours || "Not specified"}</p>
           </div>
           <div className="card p-5">
-            <p className="eyebrow">Payment</p>
-            <p className="mt-2 font-semibold text-ink">₹{job.price}</p>
+            <p className="eyebrow">Agreed Payout</p>
+            <p className="mt-2 font-semibold text-emerald-400 font-mono text-xl">₹{agreement?.agreedPaymentAmount || job.price}</p>
           </div>
         </div>
 
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* Left: Job Details */}
           <div className="card p-6">
             <p className="eyebrow">Job details</p>
             <p className="mt-3 whitespace-pre-line text-sm leading-6 text-muted">{job.description}</p>
@@ -216,14 +318,34 @@ const ActiveJobPage = () => {
             )}
           </div>
 
+          {/* Right: Job Progress & Next Step */}
           <div className="card p-6">
             <p className="eyebrow">Job progress</p>
             <div className="mt-5 space-y-4">
               {[
                 ["Application", "Completed", true],
-                ["Agreement", "Completed", true],
-                ["Work", completed ? "Approved" : expired ? "Expired" : completionStatus === "completion_requested" ? "Awaiting approval" : "Active", completed || completionStatus === "completion_requested"],
-                ["Rating & experience", completed ? (userRating ? "Rated ★" : "Ready") : "Locked", completed],
+                ["Agreement", "Signed & Bound", true],
+                [
+                  "Work Execution",
+                  completed
+                    ? "Approved"
+                    : expired
+                    ? "Expired"
+                    : completionStatus === "completion_requested"
+                    ? "Under Inspection"
+                    : "In Progress",
+                  completed || completionStatus === "completion_requested",
+                ],
+                [
+                  "UPI Settlement",
+                  paymentRecord?.isFullyConfirmed
+                    ? "Settled ✓"
+                    : completed
+                    ? "Awaiting Mutual Confirmation"
+                    : "Locked",
+                  Boolean(paymentRecord?.isFullyConfirmed),
+                ],
+                ["Rating & Review", completed ? (userRating ? "Rated ★" : "Ready") : "Locked", Boolean(userRating)],
               ].map(([label, status, done], index) => (
                 <div key={label} className="flex items-center gap-3">
                   <span
@@ -246,42 +368,47 @@ const ActiveJobPage = () => {
             <div className="mt-6 rounded-xl border border-line bg-charcoal-elevated p-4">
               <p className="text-sm font-semibold text-ink">Next step</p>
               <p className="mt-1 text-sm leading-6 text-muted">
-                {isStudent && !completed && !expired && completionStatus === "in_progress" && "When you finish the offline work, tell the business that the work is complete before the job end time."}
-                {isStudent && !completed && completionStatus === "completion_requested" && "Your completion request was sent. Wait for the business to approve the job."}
-                {isBusiness && !completed && completionStatus === "completion_requested" && "The student marked this job as completed. Approve it below to officially complete the job."}
-                {isBusiness && !completed && !application && "Wait for the student to mark this job as completed. You will receive a notification when they do."}
-                {expired && !completed && "This job has expired because its end date and time have passed. Completion can no longer be submitted."}
-                {completed && (userRating ? "Thank you for rating! Both parties have closed out this shift." : "The job is completed! Leave your 5-star rating and comment.")}
+                {isStudent && !completed && !expired && completionStatus === "in_progress" &&
+                  "When you finish the work (even if finishing early!), tap the button below to notify the business for final inspection."}
+                {isStudent && !completed && completionStatus === "completion_requested" &&
+                  "Your completion request was sent. The business is currently inspecting the completed work."}
+                {isBusiness && !completed && completionStatus === "completion_requested" &&
+                  "The student has completed the tasks. Inspect the work and click 'Approve Completed Work' to unlock payment."}
+                {isBusiness && !completed && completionStatus !== "completion_requested" &&
+                  "Student is performing the assigned work. Once they mark it completed, you will be prompted to inspect."}
+                {expired && !completed &&
+                  "This job has expired because its end date and time have passed. Completion can no longer be submitted."}
+                {completed && !paymentRecord?.isFullyConfirmed &&
+                  "Scan the student's UPI QR code or pay via UPI/cash, then confirm below."}
+                {completed && paymentRecord?.isFullyConfirmed &&
+                  "Payment fully confirmed and settled! Thank you for maintaining mutual trust on NearPin."}
               </p>
             </div>
 
+            {/* In-Progress Student Action */}
             {isStudent && !completed && !expired && completionStatus === "in_progress" && (
               <Button onClick={requestCompletion} disabled={submitting} variant="signal" className="mt-5 w-full">
                 {submitting ? "Sending..." : "I've Completed My Work"}
               </Button>
             )}
 
+            {/* Waiting for approval */}
             {isStudent && !completed && !expired && completionStatus === "completion_requested" && (
-              <div className="mt-5 rounded-xl border border-gold/30 bg-gold/10 p-4 text-sm text-ink">
-                ⏳ Waiting for business approval.
+              <div className="mt-5 rounded-xl border border-gold/30 bg-gold/10 p-4 text-sm text-ink text-center">
+                ⏳ Waiting for business owner to inspect and approve.
               </div>
             )}
 
+            {/* In-Progress Business Approval Action */}
             {isBusiness && !completed && !expired && completionStatus === "completion_requested" && (
-              <Button onClick={approveCompletion} disabled={submitting} variant="signal" className="mt-5 w-full">
-                {submitting ? "Approving..." : "Approve Completed Work"}
-              </Button>
-            )}
-
-            {completed && !userRating && (
-              <Button onClick={() => setShowReviewModal(true)} variant="signal" className="mt-5 w-full">
-                ⭐ Leave 5-Star Rating & Review
+              <Button onClick={approveCompletion} disabled={submitting} variant="signal" className="mt-5 w-full !bg-emerald-500 hover:!bg-emerald-400 !text-charcoal font-bold">
+                {submitting ? "Approving..." : "Approve Completed Work & Open Settlement"}
               </Button>
             )}
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button to={dashboardPath} variant="signal">
             Back to dashboard
           </Button>

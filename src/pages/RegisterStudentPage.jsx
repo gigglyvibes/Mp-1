@@ -6,6 +6,7 @@ import * as authApi from "../api/auth.api";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
+import { UPI_REGEX } from "../utils/upi";
 
 const RegisterStudentPage = () => {
   const { registerStudent } = useAuth();
@@ -339,6 +340,30 @@ const RegisterStudentPage = () => {
               {...register("aadhaarCard", { required: "Aadhaar Card is required" })}
             />
             {errors.aadhaarCard && <p className="mt-1 text-xs text-signal-dark">{errors.aadhaarCard.message}</p>}
+          </div>
+
+          {/* Student Direct Payout UPI ID */}
+          <div className="rounded-xl border border-teal/30 bg-teal/5 p-4 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="label-field !mb-0 font-semibold text-ink">
+                Bank UPI ID for Direct Payouts <span className="text-signal-dark">*</span>
+              </label>
+              <span className="font-mono text-[10px] uppercase tracking-wide text-teal">NPCI Verified</span>
+            </div>
+            <p className="text-xs text-muted">
+              Businesses pay you directly upon completing your shift. Enter your real UPI ID (from Google Pay, PhonePe, or Paytm).
+            </p>
+            <Input
+              placeholder="e.g. yourname@okhdfcbank or 9876543210@paytm"
+              error={errors.upiId?.message}
+              {...register("upiId", {
+                required: "UPI ID is required so businesses can pay you directly",
+                pattern: {
+                  value: UPI_REGEX,
+                  message: "Enter a valid UPI ID (e.g. name@oksbi or phone@paytm)",
+                },
+              })}
+            />
           </div>
 
           <Input

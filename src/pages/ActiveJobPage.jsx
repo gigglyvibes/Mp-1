@@ -205,14 +205,12 @@ const ActiveJobPage = () => {
             paymentRecord={paymentRecord}
             isBusiness={isBusiness}
             isStudent={isStudent}
-            studentUser={application?.student || { name: "Student", phone: "" }}
-            businessUser={job.business || { businessName: "Business" }}
-            amount={agreement?.agreedPaymentAmount }
             jobTitle={job.title}
             onPaymentUpdated={(updated) => {
               setPaymentRecord(updated);
               setMessage("Payment confirmation recorded successfully!");
             }}
+            onRefresh={load}
             onOpenReview={() => setShowReviewModal(true)}
           />
         )}

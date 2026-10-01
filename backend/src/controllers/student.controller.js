@@ -3,6 +3,7 @@ const ApiResponse = require("../utils/ApiResponse");
 const ApiError = require("../utils/ApiError");
 const Student = require("../models/Student");
 const { uploadMultiple } = require("../services/upload.service");
+const { normalizeUpi, isValidUpi } = require("../utils/upi");
 
 /**
  * @route GET /api/v1/students/profile
@@ -19,8 +20,17 @@ const updateProfile = asyncHandler(async (req, res) => {
   const updates = {};
 
   allowedFields.forEach((field) => {
+    if (field === "upiId") return;
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   });
+
+  if (req.body.upiId !== undefined) {
+    const normalized = normalizeUpi(req.body.upiId);
+    if (!normalized || !isValidUpi(normalized)) {
+      throw ApiError.badRequest("Enter a valid UPI ID, e.g. name@okhdfcbank");
+    }
+    updates.upiId = normalized;
+  }
 
   const hasLatitude = req.body.latitude !== undefined;
   const hasLongitude = req.body.longitude !== undefined;

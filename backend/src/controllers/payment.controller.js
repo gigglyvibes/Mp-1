@@ -6,6 +6,7 @@ const PaymentConfirmation = require("../models/PaymentConfirmation");
 const { notifyUser } = require("../sockets/notification.socket");
 const { APPLICATION_STATUS } = require("../config/constants");
 const Application = require("../models/Application");
+const { isValidUpi } = require("../utils/upi");
 
 /**
  * @route GET /api/v1/payments/agreement/:agreementId
@@ -105,7 +106,7 @@ const initPaymentConfirmation = asyncHandler(async (req, res) => {
  * Uses atomic updates to avoid race conditions.
  */
 const confirmPayment = asyncHandler(async (req, res) => {
-  const recordBefore = await PaymentConfirmation.findById(req.params.id);
+  const recordBefore = await PaymentConfirmation.findById(req.params.id).populate("student", "name email phone upiId");
   if (!recordBefore) throw ApiError.notFound("Payment confirmation record not found.");
 
   if (recordBefore.isDisputed) {
@@ -124,7 +125,7 @@ const confirmPayment = asyncHandler(async (req, res) => {
 
   const userId = req.user._id.toString();
   const isBusiness = recordBefore.business.toString() === userId;
-  const isStudent = recordBefore.student.toString() === userId;
+  const isStudent = (recordBefore.student?._id ? recordBefore.student._id.toString() : recordBefore.student.toString()) === userId;
 
   if (!isBusiness && !isStudent) throw ApiError.forbidden("You are not a party to this payment confirmation.");
 
@@ -145,6 +146,12 @@ const confirmPayment = asyncHandler(async (req, res) => {
       updateFields.paymentMethod = paymentMethod;
 
       if (paymentMethod === "upi") {
+        const studentUpi = recordBefore.student?.upiId;
+        if (!isValidUpi(studentUpi)) {
+          throw ApiError.badRequest(
+            "The student has not added a valid UPI ID. Choose cash or ask the student to add one."
+          );
+        }
         if (!upiReference || !/^\d{12}$/.test(String(upiReference).trim())) {
           throw ApiError.badRequest("A valid 12-digit numeric UPI/UTR transaction reference number is required for UPI payments.");
         }

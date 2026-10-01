@@ -6,6 +6,7 @@ const { generateAccessToken, generateRefreshToken } = require("../utils/generate
 const { USER_ROLES } = require("../config/constants");
 const otpService = require("./otp.service");
 const crypto = require("crypto");
+const { normalizeUpi } = require("../utils/upi");
 
 const buildAuthTokens = (user) => {
   const payload = { id: user._id, role: user.role };
@@ -45,6 +46,7 @@ const registerStudent = async (payload) => {
     gender: payload.gender,
     about: payload.about,
     collegeName: payload.collegeName,
+    upiId: normalizeUpi(payload.upiId),
     location: payload.location,
     geoLocation: { type: "Point", coordinates: [payload.longitude, payload.latitude] },
     documents: payload.documents,

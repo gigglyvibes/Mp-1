@@ -5,6 +5,7 @@ import * as agreementApi from "../api/agreement.api";
 import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
+import { isValidUpi, normalizeUpi } from "../utils/upi";
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -25,7 +26,7 @@ const formatTime = (value) => {
 
 const AgreementPage = () => {
   const { applicationId } = useParams();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [agreement, setAgreement] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,8 +48,28 @@ const AgreementPage = () => {
   const isBusiness = user?._id === agreement?.business || user?.id === agreement?.business;
   const signature = isBusiness ? agreement?.businessSignature : agreement?.studentSignature;
 
+  // Student UPI guarantee before signing
+  const [activeStudentUpi, setActiveStudentUpi] = useState(user?.upiId || "");
+  const [studentUpiInput, setStudentUpiInput] = useState(user?.upiId || "");
+  const [editingStudentUpi, setEditingStudentUpi] = useState(false);
+  const [savingUpi, setSavingUpi] = useState(false);
+
+  useEffect(() => {
+    if (user?.upiId) {
+      setActiveStudentUpi(user.upiId);
+      setStudentUpiInput(user.upiId);
+    }
+  }, [user?.upiId]);
+
+  const studentHasValidUpi = isValidUpi(activeStudentUpi);
+
   const sign = async () => {
     if (!hasAgreed) return;
+    if (!isBusiness && !studentHasValidUpi) {
+      setError("Please save a valid UPI ID below before signing the agreement.");
+      setEditingStudentUpi(true);
+      return;
+    }
     setSigning(true);
     setError("");
     try {
@@ -64,6 +85,28 @@ const AgreementPage = () => {
       setError(err.response?.data?.message || "Unable to sign the agreement.");
     } finally {
       setSigning(false);
+    }
+  };
+
+  const handleUpdateStudentUpi = async (e) => {
+    e.preventDefault();
+    const val = normalizeUpi(studentUpiInput);
+    if (!isValidUpi(val)) {
+      setError("Please enter a valid UPI ID (e.g. yourname@oksbi or phone@paytm).");
+      return;
+    }
+    setSavingUpi(true);
+    setError("");
+    try {
+      const { updateProfile } = await import("../api/student.api");
+      await updateProfile({ upiId: val });
+      setActiveStudentUpi(val);
+      await refreshUser?.();
+      setEditingStudentUpi(false);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to update UPI ID.");
+    } finally {
+      setSavingUpi(false);
     }
   };
 
@@ -318,6 +361,44 @@ const AgreementPage = () => {
                     Signatory Agreement & Acknowledgment
                   </h3>
                   
+                  {/* Student UPI Verification before signing */}
+                  {!isBusiness && (
+                    <div className="mt-4 rounded-xl border border-line bg-charcoal p-4 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-ink">Your Payout UPI ID:</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingStudentUpi(!editingStudentUpi)}
+                          className="font-mono text-teal hover:underline text-[11px]"
+                        >
+                          {editingStudentUpi ? "Cancel" : "Change"}
+                        </button>
+                      </div>
+                      {editingStudentUpi ? (
+                        <form onSubmit={handleUpdateStudentUpi} className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={studentUpiInput}
+                            onChange={(e) => setStudentUpiInput(e.target.value)}
+                            placeholder="e.g. name@oksbi or phone@paytm"
+                            className="flex-1 rounded-lg border border-line bg-charcoal-elevated px-3 py-1.5 font-mono text-xs text-ink focus:border-teal focus:outline-none"
+                            autoFocus
+                          />
+                          <Button type="submit" variant="signal" size="sm" disabled={savingUpi} className="!py-1 !text-xs font-bold">
+                            {savingUpi ? "Saving..." : "Save UPI"}
+                          </Button>
+                        </form>
+                      ) : (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span className={`font-mono text-xs ${studentHasValidUpi ? "text-emerald-400 font-semibold" : "text-amber-400"}`}>
+                            {activeStudentUpi || "No UPI configured (Required)"}
+                          </span>
+                          {studentHasValidUpi && <span className="text-[10px] text-muted">✓ Will be used for direct payout QR code</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Explicit Checkbox */}
                   <label className="mt-4 flex items-start gap-3.5 cursor-pointer select-none">
                     <input

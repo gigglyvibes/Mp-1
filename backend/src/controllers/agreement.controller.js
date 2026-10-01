@@ -6,6 +6,7 @@ const applicationRepository = require("../repositories/application.repository");
 const jobRepository = require("../repositories/job.repository");
 const { notifyUser } = require("../sockets/notification.socket");
 const { APPLICATION_STATUS, JOB_STATUS } = require("../config/constants");
+const { isValidUpi } = require("../utils/upi");
 
 const TERMS_TEXT = `1. This platform only connects Business Owners and Students.
 2. The platform does not guarantee work quality.
@@ -120,6 +121,17 @@ const signAgreement = asyncHandler(async (req, res) => {
   }
   if (isStudent && agreement.studentSignature?.fullName) {
     throw ApiError.badRequest("The student has already signed this agreement.");
+  }
+
+  // Pre-signing hard barrier: student MUST have a valid UPI ID registered so payment card is never empty
+  if (isStudent) {
+    const Student = require("../models/Student");
+    const studentDoc = await Student.findById(userId).select("upiId");
+    if (!isValidUpi(studentDoc?.upiId)) {
+      throw ApiError.badRequest(
+        "A valid UPI ID is required before signing the agreement to ensure seamless peer-to-peer payout. Please update your UPI ID in your student profile."
+      );
+    }
   }
 
   if (isBusiness) {

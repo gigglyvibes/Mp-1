@@ -1,5 +1,6 @@
 const { body } = require("express-validator");
 const { MIN_STUDENT_AGE, MAX_STUDENT_AGE } = require("../config/constants");
+const { UPI_REGEX } = require("../utils/upi");
 
 const commonAccountFields = [
   body("email").isEmail().withMessage("A valid email is required").normalizeEmail(),
@@ -17,6 +18,12 @@ const registerStudentValidator = [
   body("location").trim().notEmpty().withMessage("Location is required"),
   body("latitude").isFloat({ min: -90, max: 90 }).withMessage("Latitude must be between -90 and 90"),
   body("longitude").isFloat({ min: -180, max: 180 }).withMessage("Longitude must be between -180 and 180"),
+  body("upiId")
+    .trim()
+    .notEmpty()
+    .withMessage("UPI ID is required for direct student payouts")
+    .matches(UPI_REGEX)
+    .withMessage("Enter a valid UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm)"),
 ];
 
 const registerBusinessValidator = [

@@ -27,6 +27,7 @@ const createStudent = async (overrides = {}) => {
     name: overrides.name || `Test Student ${n}`,
     age: overrides.age ?? 21,
     gender: overrides.gender || "male",
+    upiId: overrides.upiId !== undefined ? overrides.upiId : `student${n}@okhdfcbank`,
     documents: { aadhaarCard: { url: "https://example.com/aadhaar.jpg" } },
     geoLocation: { type: "Point", coordinates: overrides.coordinates || MG_ROAD_BANGALORE },
     isEmailVerified: true,

@@ -8,6 +8,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Spinner from "../../components/ui/Spinner";
 import ReviewModal from "../../components/reviews/ReviewModal";
+import { isValidUpi, normalizeUpi } from "../../utils/upi";
 
 const TABS = [
   { key: "", label: "All" },
@@ -35,10 +36,11 @@ const StudentDashboardPage = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [reviewModalTarget, setReviewModalTarget] = useState(null);
 
-  // UPI ID quick editor
+  // UPI ID Payout Settings state
   const [editingUpi, setEditingUpi] = useState(false);
   const [upiInput, setUpiInput] = useState(user?.upiId || "");
   const [savingUpi, setSavingUpi] = useState(false);
+  const [upiError, setUpiError] = useState("");
 
   useEffect(() => {
     refreshUser().catch(() => {});
@@ -49,6 +51,27 @@ const StudentDashboardPage = () => {
       setUpiInput(user.upiId);
     }
   }, [user?.upiId]);
+
+  const handleSaveUpi = async (e) => {
+    e?.preventDefault();
+    setUpiError("");
+    const normalized = normalizeUpi(upiInput);
+    if (!normalized || !isValidUpi(normalized)) {
+      setUpiError("Enter a valid UPI ID (e.g. yourname@okhdfcbank or phone@paytm).");
+      return;
+    }
+    setSavingUpi(true);
+    try {
+      await studentApi.updateProfile({ upiId: normalized });
+      await refreshUser?.();
+      setSuccessMessage("UPI ID saved! Your dynamic QR code will now pay directly to this ID.");
+      setEditingUpi(false);
+    } catch (err) {
+      setUpiError(err?.response?.data?.message || "Failed to update UPI ID.");
+    } finally {
+      setSavingUpi(false);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -62,23 +85,6 @@ const StudentDashboardPage = () => {
       })
       .finally(() => setLoading(false));
   }, [tab]);
-
-  const handleSaveUpi = async (e) => {
-    e?.preventDefault();
-    if (!upiInput.trim()) return;
-    setSavingUpi(true);
-    setError("");
-    try {
-      await studentApi.updateProfile({ upiId: upiInput.trim() });
-      await refreshUser();
-      setSuccessMessage("UPI ID saved! Your dynamic QR code will now pay directly to this ID.");
-      setEditingUpi(false);
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to update UPI ID.");
-    } finally {
-      setSavingUpi(false);
-    }
-  };
 
   const withdraw = async (id) => {
     setError("");
@@ -118,6 +124,19 @@ const StudentDashboardPage = () => {
         <p className="mt-5 rounded-lg bg-teal/15 border border-teal/40 px-4 py-3 text-sm text-ink">{successMessage}</p>
       )}
 
+      {/* Warning banner when no valid UPI ID is set */}
+      {!isValidUpi(user?.upiId) && (
+        <div className="mt-5 flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-200">
+          <span className="text-amber-400 font-bold text-base leading-none">⚠️</span>
+          <div className="flex-1">
+            <p className="font-semibold text-amber-300">Action Required: No Valid UPI ID Configured</p>
+            <p className="mt-0.5 text-muted leading-relaxed">
+              You must set a valid bank UPI ID to receive direct payouts upon completing jobs. Please edit your UPI ID below.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Profile & KPI Cards */}
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-5">
@@ -133,17 +152,22 @@ const StudentDashboardPage = () => {
           <p className="mt-1 font-mono text-[11px] uppercase tracking-wide text-muted">Verification status</p>
         </div>
 
-        {/* UPI Payout Settings Box */}
+        {/* Dedicated Card: UPI ID FOR PAYOUTS */}
         <div className="card p-5 flex flex-col justify-between border-emerald-500/30">
           <div>
             <div className="flex items-center justify-between">
-              <p className="font-mono text-[11px] uppercase tracking-wide text-emerald-400 font-semibold">UPI ID for Payouts</p>
+              <p className="font-mono text-[11px] uppercase tracking-wide text-emerald-400 font-semibold">
+                UPI ID for Payouts
+              </p>
               <button
                 type="button"
-                onClick={() => setEditingUpi(!editingUpi)}
+                onClick={() => {
+                  setUpiError("");
+                  setEditingUpi(!editingUpi);
+                }}
                 className="text-[11px] text-teal hover:underline font-mono"
               >
-                {editingUpi ? "Cancel" : "Edit"}
+                {editingUpi ? "Cancel" : isValidUpi(user?.upiId) ? "Edit" : "Not set (Click Edit)"}
               </button>
             </div>
             {editingUpi ? (
@@ -151,17 +175,26 @@ const StudentDashboardPage = () => {
                 <input
                   type="text"
                   value={upiInput}
-                  onChange={(e) => setUpiInput(e.target.value)}
+                  onChange={(e) => {
+                    setUpiInput(e.target.value);
+                    setUpiError("");
+                  }}
                   placeholder="e.g. yourname@okhdfcbank"
                   className="rounded border border-line bg-charcoal px-2 py-1 text-xs text-ink focus:border-teal focus:outline-none"
+                  autoFocus
                 />
+                {upiError && <p className="text-[10px] text-signal-dark font-medium">{upiError}</p>}
                 <Button variant="signal" size="sm" type="submit" disabled={savingUpi} className="!text-[10px] !py-1">
                   {savingUpi ? "Saving..." : "Save UPI"}
                 </Button>
               </form>
             ) : (
               <p className="mt-2 font-mono text-xs font-semibold text-ink truncate">
-                {user?.upiId || (user?.phone ? `${user.phone}@upi` : "Not set")}
+                {isValidUpi(user?.upiId) ? (
+                  <span className="text-emerald-400">{user.upiId}</span>
+                ) : (
+                  <span className="text-amber-400 font-normal">Not configured</span>
+                )}
               </p>
             )}
           </div>

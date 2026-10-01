@@ -3,18 +3,20 @@ import { QRCodeSVG } from "qrcode.react";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import * as paymentApi from "../../api/payment.api";
+import * as studentApi from "../../api/student.api";
+import { useAuth } from "../../context/AuthContext";
+import { isValidUpi, normalizeUpi } from "../../utils/upi";
 
 export default function PaymentSettlementCard({
   paymentRecord,
   isBusiness,
   isStudent,
-  studentUser: _studentUser,
-  businessUser: _businessUser,
-  amount: _clientAmount,
   jobTitle,
   onPaymentUpdated,
+  onRefresh,
   onOpenReview,
 }) {
+  const { refreshUser } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
@@ -28,22 +30,55 @@ export default function PaymentSettlementCard({
   const [disputeReason, setDisputeReason] = useState("");
   const [submittingDispute, setSubmittingDispute] = useState(false);
 
+  // Inline UPI addition state for student when UPI is missing
+  const [editingStudentUpi, setEditingStudentUpi] = useState(false);
+  const [inlineUpiInput, setInlineUpiInput] = useState("");
+  const [savingInlineUpi, setSavingInlineUpi] = useState(false);
+  const [inlineUpiError, setInlineUpiError] = useState("");
+
   // Authoritative server-side values only
   const cleanAmount = Number(paymentRecord?.agreedPaymentAmount || 0).toFixed(2);
   const studentName = paymentRecord?.student?.name || "Student";
-  const studentUpi = (paymentRecord?.student?.upiId || "").trim();
-  const hasValidUpi = Boolean(studentUpi && studentUpi.includes("@"));
+  const rawStudentUpi = paymentRecord?.student?.upiId;
+  const hasValidUpi = isValidUpi(rawStudentUpi);
+  const studentUpi = hasValidUpi ? normalizeUpi(rawStudentUpi) : "";
 
-  // Standard NPCI UPI URI Specification (Only generated if student has a valid UPI ID)
+  // Standard NPCI UPI URI Specification (Only generated when hasValidUpi is true; pa uses raw @)
   const sanitizedTitle = (jobTitle || "NearPin Task").slice(0, 30).replace(/[^a-zA-Z0-9 ]/g, "");
   const upiUri = hasValidUpi
-    ? `upi://pay?pa=${encodeURIComponent(studentUpi)}&pn=${encodeURIComponent(studentName)}&am=${cleanAmount}&cu=INR&tn=${encodeURIComponent(sanitizedTitle)}`
+    ? `upi://pay?pa=${studentUpi}&pn=${encodeURIComponent(studentName)}&am=${cleanAmount}&cu=INR&tn=${encodeURIComponent(sanitizedTitle)}`
     : "";
 
   const isBusinessConfirmed = Boolean(paymentRecord?.businessConfirmation?.confirmed);
   const isStudentConfirmed = Boolean(paymentRecord?.studentConfirmation?.confirmed);
   const isFullySettled = Boolean(paymentRecord?.isFullyConfirmed);
   const isDisputed = Boolean(paymentRecord?.isDisputed);
+
+  const handleSaveInlineUpi = async (e) => {
+    e.preventDefault();
+    setInlineUpiError("");
+    const normalized = normalizeUpi(inlineUpiInput);
+    if (!isValidUpi(normalized)) {
+      setInlineUpiError("Please enter a valid UPI ID (e.g. yourname@oksbi or phone@paytm).");
+      return;
+    }
+    setSavingInlineUpi(true);
+    try {
+      await studentApi.updateProfile({ upiId: normalized });
+      await refreshUser?.();
+      setEditingStudentUpi(false);
+      if (onRefresh) {
+        await onRefresh();
+      } else if (paymentRecord?._id) {
+        const fresh = await paymentApi.getPaymentConfirmation(paymentRecord.agreement);
+        if (fresh.data.data) onPaymentUpdated?.(fresh.data.data);
+      }
+    } catch (err) {
+      setInlineUpiError(err?.response?.data?.message || "Failed to save UPI ID.");
+    } finally {
+      setSavingInlineUpi(false);
+    }
+  };
 
   const handleCopyUpi = () => {
     if (!studentUpi) return;
@@ -230,17 +265,17 @@ export default function PaymentSettlementCard({
                 </p>
               </div>
             ) : isStudent ? (
-              // Student View: QR Code if valid UPI ID is present, or prompt to add it
+              // Student View
               hasValidUpi ? (
                 <>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-3 font-mono">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-2 font-mono">
                     Show this QR to Business
                   </p>
-                  <div className="relative rounded-2xl bg-white p-3 shadow-inner">
+                  <div className="relative my-2 rounded-2xl bg-white p-3 shadow-inner">
                     <QRCodeSVG value={upiUri} size={160} level="M" includeMargin={false} />
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-ink">Scan with any UPI App</p>
-                  <div className="mt-2 flex items-center justify-center gap-2">
+                  <p className="mt-2 text-sm font-semibold text-ink">Scan with any UPI App</p>
+                  <div className="mt-1 flex items-center justify-center gap-2">
                     <span className="rounded bg-line/60 px-2 py-0.5 font-mono text-xs text-ink/80">
                       {studentUpi}
                     </span>
@@ -257,53 +292,138 @@ export default function PaymentSettlementCard({
                   </div>
                 </>
               ) : (
-                <div className="my-4 flex flex-col items-center justify-center text-center p-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 text-amber-400 text-xl font-bold mb-2">
-                    !
+                <div className="my-3 flex w-full flex-col items-center justify-center text-center p-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/20 text-amber-400 text-lg font-bold mb-2">
+                    ⚠️
                   </div>
                   <p className="text-xs font-semibold text-amber-300">You haven&apos;t added a UPI ID yet</p>
                   <p className="text-[11px] text-muted mt-1 max-w-xs">
-                    Please add your UPI ID in your Student Profile so businesses can scan and pay you directly, or receive cash.
+                    Add your real bank UPI ID to instantly generate your direct payout QR code.
                   </p>
+
+                  {editingStudentUpi ? (
+                    <form onSubmit={handleSaveInlineUpi} className="mt-3 w-full max-w-xs space-y-2">
+                      <input
+                        type="text"
+                        value={inlineUpiInput}
+                        onChange={(e) => {
+                          setInlineUpiInput(e.target.value);
+                          setInlineUpiError("");
+                        }}
+                        placeholder="e.g. yourname@okhdfcbank"
+                        className="w-full rounded-xl border border-line bg-charcoal px-3 py-2 text-xs font-mono text-ink focus:border-teal focus:outline-none text-center"
+                        autoFocus
+                      />
+                      {inlineUpiError && (
+                        <p className="text-[10px] text-signal-dark font-medium">{inlineUpiError}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingStudentUpi(false);
+                            setInlineUpiError("");
+                          }}
+                          className="flex-1 !py-1 text-xs"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          variant="signal"
+                          size="sm"
+                          disabled={savingInlineUpi}
+                          className="flex-1 !py-1 text-xs !bg-emerald-500 hover:!bg-emerald-400 text-charcoal font-bold"
+                        >
+                          {savingInlineUpi ? "Saving..." : "Save & Generate QR"}
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="signal"
+                      size="sm"
+                      onClick={() => {
+                        setInlineUpiInput("");
+                        setInlineUpiError("");
+                        setEditingStudentUpi(true);
+                      }}
+                      className="mt-3 !py-1.5 text-xs font-bold !bg-emerald-500 hover:!bg-emerald-400 text-charcoal"
+                    >
+                      + Add UPI ID Now
+                    </Button>
+                  )}
                 </div>
               )
             ) : (
-              // Business View: Shows student's verified UPI or warning if student has not added it
+              // Business View
               hasValidUpi ? (
-                <>
+                <div className="w-full flex flex-col items-center">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted mb-2 font-mono">
-                    Student UPI Information
+                    Direct Student Payout
                   </p>
-                  <div className="my-3 flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
-                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                    </svg>
+
+                  {/* Mobile Direct App Intent Button (Visible on mobile/tablets) */}
+                  <div className="w-full md:hidden my-2">
+                    <a
+                      href={upiUri}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-4 py-3 text-sm font-bold text-charcoal shadow-lg hover:brightness-110 active:scale-95 transition transform"
+                    >
+                      <span>⚡ Pay ₹{cleanAmount} with UPI App</span>
+                    </a>
+                    <p className="text-[11px] text-muted mt-2 text-center">
+                      Opens Google Pay, PhonePe, Paytm, or BHIM directly
+                    </p>
                   </div>
-                  <p className="font-semibold text-ink text-sm">{studentName}</p>
-                  <div className="mt-1 flex items-center justify-center gap-2">
-                    <span className="rounded bg-line/60 px-2 py-0.5 font-mono text-xs text-ink/80">
+
+                  {/* Desktop QR Code Display (Hidden on small mobile screens to prevent clutter) */}
+                  <div className="hidden md:flex flex-col items-center my-2">
+                    <div className="rounded-2xl bg-white p-3 shadow-inner">
+                      <QRCodeSVG value={upiUri} size={150} level="M" includeMargin={false} />
+                    </div>
+                    <span className="mt-2 text-xs text-muted">
+                      Scan with any UPI app on your phone
+                    </span>
+                  </div>
+
+                  {/* Student UPI handle badge & copy button */}
+                  <div className="mt-3 flex items-center justify-center gap-2 w-full">
+                    <span className="rounded bg-line/60 px-2.5 py-1 font-mono text-xs text-ink/90 font-medium">
                       {studentUpi}
                     </span>
                     <button
                       type="button"
                       onClick={handleCopyUpi}
-                      className="text-xs text-teal hover:underline font-mono"
+                      className="text-xs text-teal hover:underline font-mono font-medium"
                     >
                       {copiedUpi ? "Copied!" : "Copy"}
                     </button>
                   </div>
-                  <p className="mt-2 text-xs text-muted">
-                    Scan the dynamic QR code on the student&apos;s phone screen, or transfer to the UPI ID above.
-                  </p>
-                </>
+
+                  {/* Critical Name Verification Warning Banner to prevent typos */}
+                  <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-left w-full">
+                    <div className="flex items-start gap-2">
+                      <span className="text-amber-400 font-bold text-sm">⚠️</span>
+                      <p className="text-[11px] leading-relaxed text-amber-200">
+                        <strong>Check receiver name:</strong> Verify that the name shown in your UPI app matches{" "}
+                        <span className="underline font-bold text-white">{studentName}</span> before entering your UPI PIN.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className="my-6 flex flex-col items-center justify-center text-center p-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 text-amber-400 text-xl font-bold mb-2">
-                    !
+                    ⚠️
                   </div>
-                  <p className="text-xs font-semibold text-amber-300">Student hasn&apos;t added a UPI ID</p>
-                  <p className="text-[11px] text-muted mt-1 max-w-xs">
-                    The student has not configured a UPI ID. Please settle this payment in Cash or ask the student to update their profile.
+                  <p className="text-xs font-semibold text-amber-300">
+                    Student hasn&apos;t added a UPI ID yet. You can pay in Cash, or ask the student to add their UPI ID.
+                  </p>
+                  <p className="text-[11px] text-muted mt-2 max-w-xs">
+                    Direct UPI QR codes and transfer links are disabled until the student enters a valid UPI handle.
                   </p>
                 </div>
               )
@@ -425,10 +545,18 @@ export default function PaymentSettlementCard({
                       <Button
                         variant="signal"
                         onClick={handleConfirmAsBusiness}
-                        disabled={submitting || isDisputed}
-                        className="w-full justify-center !bg-emerald-500 hover:!bg-emerald-400 !text-charcoal font-bold py-3 text-sm"
+                        disabled={submitting || isDisputed || (selectedMethod === "upi" && !hasValidUpi)}
+                        className={`w-full justify-center font-bold py-3 text-sm ${
+                          selectedMethod === "upi" && !hasValidUpi
+                            ? "opacity-50 cursor-not-allowed !bg-line !text-muted"
+                            : "!bg-emerald-500 hover:!bg-emerald-400 !text-charcoal"
+                        }`}
                       >
-                        {submitting ? "Confirming..." : `✓ I Paid ₹${cleanAmount}`}
+                        {submitting
+                          ? "Confirming..."
+                          : selectedMethod === "upi" && !hasValidUpi
+                          ? "UPI Payment Disabled (Student has no UPI ID)"
+                          : `✓ I Paid ₹${cleanAmount}`}
                       </Button>
                     </div>
                   ) : (

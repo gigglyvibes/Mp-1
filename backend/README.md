@@ -18,7 +18,7 @@ mutual payment confirmation — **it never processes payments itself.**
 - **File storage:** Cloudinary (via Multer memory storage)
 - **OTP delivery:** Nodemailer (email), Twilio (phone)
 - **Docs:** Swagger UI at `/api-docs`
-- **Security:** Helmet, CORS, express-mongo-sanitize, xss-clean, rate limiting
+- **Security:** Helmet, CORS, express-mongo-sanitize, sanitize-html, rate limiting
 
 ## Architecture
 

@@ -5,6 +5,7 @@ const SECTIONS = [
   { title: "How we use it", body: "To match students with nearby jobs, verify identities, generate digital work agreements, and send real-time notifications. We never sell personal data to third parties." },
   { title: "Location data", body: "Your geo-coordinates power proximity matching (the 5km radius). You can update your location at any time from your profile." },
   { title: "Document storage", body: "Aadhaar images are stored securely and are only accessible to authorized platform administrators for verification purposes." },
+  { title: "Direct P2P Settlement & Contact Privacy", body: "NearPin never holds or escrow funds. When an agreement is signed and a student's shift completion is verified, verified contact details (phone, email, and UPI address) are shared strictly between the paired student and business to facilitate direct UPI/cash settlement and dynamic QR code generation." },
   { title: "Your rights", body: "You may request a copy of your data or account deletion at any time by contacting support@nearpin.app." },
 ];
 

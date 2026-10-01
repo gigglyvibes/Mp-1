@@ -27,7 +27,7 @@ export function formatDateTimeReadable(dateStr) {
       minute: "2-digit",
       hour12: true,
     });
-  } catch (e) {
+  } catch (_e) {
     return dateStr;
   }
 }

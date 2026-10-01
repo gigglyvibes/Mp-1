@@ -68,11 +68,11 @@ const ActiveJobPage = () => {
               if (payRes.data.data) {
                 setPaymentRecord(payRes.data.data);
               }
-            } catch (pErr) {
+            } catch (_pErr) {
               // Not initiated or not ready yet
             }
           }
-        } catch (aErr) {
+        } catch (_aErr) {
           // Agreement not found yet
         }
 
@@ -207,7 +207,7 @@ const ActiveJobPage = () => {
             isStudent={isStudent}
             studentUser={application?.student || { name: "Student", phone: "" }}
             businessUser={job.business || { businessName: "Business" }}
-            amount={agreement?.agreedPaymentAmount || job.price}
+            amount={agreement?.agreedPaymentAmount }
             jobTitle={job.title}
             onPaymentUpdated={(updated) => {
               setPaymentRecord(updated);
@@ -301,7 +301,7 @@ const ActiveJobPage = () => {
           </div>
           <div className="card p-5">
             <p className="eyebrow">Agreed Payout</p>
-            <p className="mt-2 font-semibold text-emerald-400 font-mono text-xl">₹{agreement?.agreedPaymentAmount || job.price}</p>
+            <p className="mt-2 font-semibold text-emerald-400 font-mono text-xl">₹{agreement?.agreedPaymentAmount }</p>
           </div>
         </div>
 

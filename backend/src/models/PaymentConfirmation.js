@@ -3,7 +3,8 @@ const mongoose = require("mongoose");
 /**
  * The platform never processes payments. This model records
  * mutual confirmation statements from both parties after the student's
- * work has been approved by the business, along with UPI transaction details.
+ * work has been approved by the business, along with UPI transaction details
+ * and dispute tracking.
  */
 const paymentConfirmationSchema = new mongoose.Schema(
   {
@@ -30,6 +31,17 @@ const paymentConfirmationSchema = new mongoose.Schema(
     },
     isFullyConfirmed: { type: Boolean, default: false },
     fullyConfirmedAt: { type: Date },
+    // Dispute state handling
+    isDisputed: { type: Boolean, default: false },
+    disputeReason: { type: String, trim: true, default: "" },
+    disputedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    disputedAt: { type: Date },
+    disputeStatus: {
+      type: String,
+      enum: ["none", "pending_review", "resolved", "rejected"],
+      default: "none",
+    },
+    adminNotes: { type: String, trim: true, default: "" },
   },
   { timestamps: true }
 );

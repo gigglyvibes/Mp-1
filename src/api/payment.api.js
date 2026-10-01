@@ -8,3 +8,9 @@ export const initPaymentConfirmation = (agreementId) =>
 
 export const confirmPayment = (id, data = {}) =>
   axiosClient.patch(`/payments/${id}/confirm`, data);
+
+export const disputePayment = (id, data) =>
+  axiosClient.patch(`/payments/${id}/dispute`, data);
+
+export const getDisputedPayments = () =>
+  axiosClient.get("/payments/admin/disputed");

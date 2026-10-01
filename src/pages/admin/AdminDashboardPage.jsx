@@ -1,3 +1,4 @@
+import * as paymentApi from "../../api/payment.api";
 import React, { useState, useEffect, useCallback } from "react";
 import * as adminApi from "../../api/admin.api";
 import { useAuth } from "../../context/AuthContext";
@@ -9,6 +10,7 @@ const TABS = [
   { id: "verifications", label: "Aadhaar Verifications", icon: "🪪" },
   { id: "users", label: "User Directory", icon: "👥" },
   { id: "jobs", label: "Job Moderation", icon: "💼" },
+  { id: "disputes", label: "Payment Disputes", icon: "⚖️" },
   { id: "messages", label: "Support Inquiries", icon: "📬" },
   { id: "overview", label: "Platform Overview", icon: "📊" },
 ];
@@ -43,6 +45,10 @@ const AdminDashboardPage = () => {
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
+  // Payment Disputes state
+  const [disputes, setDisputes] = useState([]);
+  const [disputesLoading, setDisputesLoading] = useState(false);
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
@@ -67,7 +73,8 @@ const AdminDashboardPage = () => {
       if (userRoleFilter !== "all") params.role = userRoleFilter;
       if (userSearch) params.search = userSearch;
       const res = await adminApi.getUsers(params);
-      if (res.data?.users) setUsers(res.data.users);
+      const userList = res.data?.items || res.data?.users || (Array.isArray(res.data) ? res.data : []);
+      setUsers(userList);
     } catch (err) {
       console.error("Failed to load users", err);
     } finally {
@@ -82,13 +89,32 @@ const AdminDashboardPage = () => {
       if (jobStatusFilter !== "all") params.status = jobStatusFilter;
       if (jobSearch) params.search = jobSearch;
       const res = await adminApi.getJobs(params);
-      if (res.data?.jobs) setJobs(res.data.jobs);
+      const jobList = res.data?.items || res.data?.jobs || (Array.isArray(res.data) ? res.data : []);
+      setJobs(jobList);
     } catch (err) {
       console.error("Failed to load jobs", err);
     } finally {
       setJobsLoading(false);
     }
   }, [jobStatusFilter, jobSearch]);
+
+  const fetchDisputes = useCallback(async () => {
+    setDisputesLoading(true);
+    try {
+      const res = await paymentApi.getDisputedPayments();
+      setDisputes(res.data || []);
+    } catch {
+      showToast("Failed to load payment disputes.");
+    } finally {
+      setDisputesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "disputes") {
+      fetchDisputes();
+    }
+  }, [activeTab, fetchDisputes]);
 
   const fetchMessages = useCallback(async () => {
     setMessagesLoading(true);
@@ -119,7 +145,7 @@ const AdminDashboardPage = () => {
   // Handlers
   const handleVerifyStudent = async (studentId, status, reason = "") => {
     try {
-      await adminApi.verifyStudent(studentId, { status, reason });
+      await adminApi.verifyStudent(studentId, { decision: status, reason });
       showToast(status === "verified" ? "Student ID verified successfully!" : "Student verification rejected.");
       setRejectionModalUser(null);
       setRejectionReason("");
@@ -304,6 +330,11 @@ const AdminDashboardPage = () => {
                 {tab.id === "verifications" && (metrics?.pendingVerifications ?? 0) > 0 && (
                   <span className="ml-1 rounded-full bg-signal px-2 py-0.5 text-[10px] font-bold text-canvas">
                     {metrics.pendingVerifications}
+                  </span>
+                )}
+                {tab.id === "disputes" && disputes.length > 0 && (
+                  <span className="ml-1 rounded-full bg-signal px-2 py-0.5 text-[10px] font-bold text-canvas">
+                    {disputes.length}
                   </span>
                 )}
                 {tab.id === "messages" && messages.filter((m) => !m.isRead).length > 0 && (
@@ -715,6 +746,75 @@ const AdminDashboardPage = () => {
         )}
 
         {/* TAB 5: Platform Overview */}
+        {activeTab === "disputes" && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-ink">Disputed Payment Settlements</h2>
+                <p className="text-xs text-muted">
+                  Transactions where either the student reported non-receipt or the business reported an issue.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchDisputes} disabled={disputesLoading}>
+                {disputesLoading ? "Refreshing..." : "Refresh Disputes"}
+              </Button>
+            </div>
+
+            {disputesLoading ? (
+              <div className="flex justify-center p-12 text-sm text-muted">Loading disputes...</div>
+            ) : disputes.length === 0 ? (
+              <div className="card border border-line bg-paper p-12 text-center">
+                <span className="text-3xl">✓</span>
+                <h3 className="mt-2 text-base font-bold text-ink">Zero Active Disputes</h3>
+                <p className="mt-1 text-xs text-muted">All student-business settlements are clear.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {disputes.map((d) => (
+                  <div key={d._id} className="card border border-signal/40 bg-paper p-5 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/60 pb-3">
+                      <div>
+                        <span className="font-mono text-xs font-bold text-signal uppercase tracking-wider">
+                          Disputed on {new Date(d.disputedAt || d.updatedAt).toLocaleDateString()}
+                        </span>
+                        <h3 className="text-base font-bold text-ink">{d.job?.title || "Shift Assignment"}</h3>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-muted block uppercase">Amount</span>
+                        <span className="text-lg font-bold font-mono text-emerald-400">₹{d.agreedPaymentAmount}</span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-signal/10 border border-signal/20 p-3 text-xs text-signal-light">
+                      <p className="font-bold text-ink">Dispute Reason:</p>
+                      <p className="mt-0.5">{d.disputeReason}</p>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2 text-xs pt-1">
+                      <div className="rounded-lg bg-charcoal p-3 border border-line">
+                        <p className="font-bold text-ink">Student</p>
+                        <p className="text-muted">{d.student?.name} ({d.student?.email})</p>
+                        <p className="font-mono text-ink mt-1">UPI: {d.student?.upiId || "Not set"}</p>
+                        <p className="mt-1 text-[11px] text-muted">
+                          Receipt Status: {d.studentConfirmation?.confirmed ? "Confirmed ✓" : "Unconfirmed ✗"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-charcoal p-3 border border-line">
+                        <p className="font-bold text-ink">Business</p>
+                        <p className="text-muted">{d.business?.businessName || d.business?.name} ({d.business?.email})</p>
+                        <p className="font-mono text-ink mt-1">Method: {d.paymentMethod} {d.upiReference ? `(UTR: ${d.upiReference})` : ""}</p>
+                        <p className="mt-1 text-[11px] text-muted">
+                          Dispatch Status: {d.businessConfirmation?.confirmed ? "Confirmed ✓" : "Unconfirmed ✗"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "overview" && (
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-ink">Platform Architecture & Health</h2>

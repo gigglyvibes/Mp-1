@@ -75,7 +75,7 @@ The original archive contained `backend/backend/.env`. The repaired ZIP intentio
 - Restored the existing backend reset-password flow in the frontend with a dedicated reset-password page and route using the existing token/API; no new password capability was introduced.
 - Replaced broad `localStorage.clear()` calls in authentication cleanup with removal of only the application's authentication keys.
 - Kept ContactPage unchanged because there is no existing backend contact-message endpoint to connect without inventing a new functionality.
-- Kept PhonePe/UPI/QR payment functionality out of this checkpoint as requested.
+- Payment settlement implemented as peer-to-peer (P2P) direct UPI & cash mutual confirmation protocol with atomic concurrency guards, 12-digit UTR verification, dispute resolution, and zero platform custody.
 
 ## Verification performed after Checkpoint 4
 
